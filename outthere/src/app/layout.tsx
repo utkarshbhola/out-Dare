@@ -13,7 +13,7 @@ const instrumentSans = Instrument_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "OutThere - Real-world social discovery",
+  title: "Out-Dare - Real-world social discovery",
   description: "Find verified others nearby attending the same events, concerts, treks, cafés, and activities.",
 };
 

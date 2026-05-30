@@ -8,6 +8,8 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/welcome'
 
   if (code) {
+    console.log("AUTH CALLBACK HIT");
+    console.log("CODE:", code);
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
