@@ -23,6 +23,8 @@ export default function EditProfilePage() {
   const [city, setCity] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -121,6 +123,59 @@ export default function EditProfilePage() {
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please upload a valid image file.');
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadError('Image must be smaller than 5MB.');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setUploadError(null);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const fileExt = (file.name.split('.').pop() || '').replace(/[^a-zA-Z0-9]/g, '');
+      const filePath = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicData, error: publicError } = await supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath) as any;
+
+      if (publicError) {
+        throw publicError;
+      }
+
+      const publicUrl = publicData?.publicUrl || publicData?.public_url || '';
+      if (!publicUrl) {
+        throw new Error('Unable to resolve avatar URL.');
+      }
+
+      setAvatarUrl(publicUrl);
+    } catch (err: any) {
+      console.error('Avatar upload failed:', err);
+      setUploadError(err?.message || 'Failed to upload avatar.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="max-w-4xl mx-auto py-8">
@@ -153,15 +208,42 @@ export default function EditProfilePage() {
               )}
 
               <div className="grid gap-6 sm:grid-cols-2">
-                <label className="block text-sm text-[#9C8B72]">
-                  Avatar image URL
-                  <input
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-[#16120E] px-4 py-3 text-white focus:border-[#E07340]/50 focus:outline-none"
-                    placeholder="https://..."
-                  />
-                </label>
+                <div className="block text-sm text-[#9C8B72]">
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Profile avatar</span>
+                    <span className="text-xs text-[#9C8B72]">PNG/JPG, max 5MB</span>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-4">
+                    <div className="h-24 w-24 overflow-hidden rounded-3xl border border-white/10 bg-[#1B1814]">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Avatar preview"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-sm text-[#9C8B72]">
+                          No avatar yet
+                        </div>
+                      )}
+                    </div>
+                    <label className="cursor-pointer rounded-2xl border border-white/10 bg-[#16120E] px-4 py-3 text-sm font-semibold text-white transition hover:border-[#E07340]/50">
+                      {uploadingAvatar ? 'Uploading…' : 'Choose file'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        className="hidden"
+                        disabled={uploadingAvatar}
+                      />
+                    </label>
+                  </div>
+
+                  {uploadError && (
+                    <p className="mt-3 text-sm text-red-300">{uploadError}</p>
+                  )}
+                </div>
                 <label className="block text-sm text-[#9C8B72]">
                   Display name
                   <input

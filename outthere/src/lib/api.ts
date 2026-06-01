@@ -59,6 +59,20 @@ export async function joinEvent(eventId: string) {
   return response.json();
 }
 
+export async function leaveEvent(eventId: string) {
+  const headers = await getHeaders();
+  const response = await fetch(`${API_BASE_URL}/events/${eventId}/join`, {
+    method: 'DELETE',
+    headers,
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to leave event');
+  }
+  return response.json();
+}
+
 export async function sendChatMessage(content: string) {
   const headers = await getHeaders();
   const response = await fetch(`${API_BASE_URL}/chat`, {
