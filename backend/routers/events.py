@@ -9,7 +9,7 @@ router = APIRouter()
 def get_events():
     try:
         response = supabase.table("events").select(
-            "*, event_attendees(is_solo, profiles(avatar_url)), groups(*)"
+            "*, event_attendees(profile_id,is_solo,profiles(avatar_url)), groups(*)"
         ).order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
