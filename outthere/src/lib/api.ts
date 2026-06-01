@@ -1,7 +1,24 @@
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+
 const API_BASE_URL = 'http://localhost:8000/api';
 
+async function getHeaders(): Promise<HeadersInit> {
+  const supabase = getSupabaseBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+  return headers;
+}
+
 export async function fetchEvents() {
-  const response = await fetch(`${API_BASE_URL}/events`);
+  const headers = await getHeaders();
+  const response = await fetch(`${API_BASE_URL}/events`, {
+    headers,
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch events');
   }
@@ -9,11 +26,10 @@ export async function fetchEvents() {
 }
 
 export async function createEvent(eventData: any) {
+  const headers = await getHeaders();
   const response = await fetch(`${API_BASE_URL}/events`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       title: eventData.title,
       description: eventData.description,
@@ -31,8 +47,10 @@ export async function createEvent(eventData: any) {
 }
 
 export async function joinEvent(eventId: string) {
+  const headers = await getHeaders();
   const response = await fetch(`${API_BASE_URL}/events/${eventId}/join`, {
     method: 'POST',
+    headers,
   });
   
   if (!response.ok) {
@@ -42,11 +60,10 @@ export async function joinEvent(eventId: string) {
 }
 
 export async function sendChatMessage(content: string) {
+  const headers = await getHeaders();
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       role: 'user',
       content,

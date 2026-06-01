@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Compass, Sparkles, MapPin, Map, User, CheckCircle2 } from 'lucide-react';
@@ -17,6 +17,30 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Redirect authenticated users to /discover (middleware handles onboarding gate)
+  useEffect(() => {
+    const checkSession = async () => {
+      const supabase = getSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        window.location.href = '/discover';
+      }
+    };
+    checkSession();
+
+    // Listen for auth state changes (capturing hashes/magic link fallbacks)
+    const supabase = getSupabaseBrowserClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      if (session?.user) {
+        window.location.href = '/discover';
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleJoinWaitlist = async (e: React.FormEvent) => {
     e.preventDefault();

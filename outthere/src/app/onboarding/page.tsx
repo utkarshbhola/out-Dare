@@ -21,6 +21,7 @@ export default function OnboardingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Fetch current user on mount
   useEffect(() => {
@@ -111,8 +112,8 @@ export default function OnboardingPage() {
     try {
       const supabase = getSupabaseBrowserClient();
       const cleanedHandle = `@${handle.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()}`;
-      
-      // Auto-assign avatar url based on user id if not set
+
+      // Auto-assign avatar url based on name if not set in state
       const finalAvatarUrl = avatarUrl || `https://api.dicebear.com/5.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=E07340&color=F5EDD8`;
 
       // 1. Save profile in the database
@@ -160,35 +161,52 @@ export default function OnboardingPage() {
       </div>
     );
   }
-  const handleAvatarUpload = async (
-        e: React.ChangeEvent<HTMLInputElement>
-      ) => {
-        const file = e.target.files?.[0];
-        if (!file || !user) return;
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
 
-        const supabase = getSupabaseBrowserClient();
+    // Basic validation
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload a valid image file.');
+      return;
+    }
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      setError('Image must be smaller than 5MB.');
+      return;
+    }
 
-        const fileExt = file.name.split('.').pop();
+    setUploadingAvatar(true);
+    setError(null);
 
-        const filePath = `${user.id}.${fileExt}`;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const fileExt = (file.name.split('.').pop() || '').replace(/[^a-zA-Z0-9]/g, '');
+      const filePath = `${user.id}.${fileExt}`;
 
-        const { error } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, file, {
-            upsert: true,
-          });
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
 
-        if (error) {
-          console.error(error);
-          return;
-        }
+      if (uploadError) throw uploadError;
 
-        const { data } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath);
+      const { data: publicData, error: publicError } = await supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath) as any;
 
-        setAvatarUrl(data.publicUrl);
-      };
+      if (publicError) throw publicError;
+
+      const publicUrl = publicData?.publicUrl || publicData?.public_url || '';
+      if (!publicUrl) throw new Error('Could not get public URL for avatar.');
+
+      setAvatarUrl(publicUrl);
+    } catch (err: any) {
+      console.error('Avatar upload error:', err);
+      setError(err?.message || 'Failed to upload avatar. Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
   return (
     <div className="min-h-screen bg-[#0E0B08] text-[#F5EDD8] font-sans selection:bg-[#E07340]/30 overflow-x-hidden flex flex-col justify-between relative">
       
@@ -237,11 +255,30 @@ export default function OnboardingPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-              />
+              {/* Avatar Upload */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-28 h-28 rounded-full bg-[#16120E] border border-white/10 overflow-hidden flex items-center justify-center">
+                  {avatarUrl ? (
+                    // Image preview
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarUrl} alt="Avatar preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-[#9C8B72] text-sm">No photo</div>
+                  )}
+                </div>
+
+                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#16120E] border border-white/10 text-sm text-white hover:bg-[#1b1713] cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    disabled={uploadingAvatar}
+                    className="hidden"
+                  />
+                  <span className="text-[#E07340] font-bold">{uploadingAvatar ? 'Uploading...' : 'Upload Photo'}</span>
+                </label>
+                <p className="text-[10px] text-[#9C8B72]">PNG, JPG or GIF. Max size 5MB.</p>
+              </div>
               {/* Full Name */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-[#9C8B72] pl-1">
@@ -316,14 +353,20 @@ export default function OnboardingPage() {
                   <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-[#9C8B72] pointer-events-none">
                     <MapPin size={16} />
                   </span>
-                  <input
-                    type="text"
+                  <select
                     required
-                    placeholder="Bangalore"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="w-full bg-[#16120E] border border-white/10 rounded-2xl pl-10 pr-4 py-3.5 focus:border-[#E07340]/50 focus:outline-none transition-all text-sm text-white placeholder:text-[#9C8B72]/50"
-                  />
+                    className="w-full bg-[#16120E] border border-white/10 rounded-2xl pl-10 pr-4 py-3.5 focus:border-[#E07340]/50 focus:outline-none transition-all text-sm text-white"
+                  >
+                    <option value="" disabled>Select your city</option>
+                    <option value="Bangalore">Bangalore</option>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Mumbai">Mumbai</option>
+                    <option value="Pune">Pune</option>
+                    <option value="Hyderabad">Hyderabad</option>
+                    <option value="Chennai">Chennai</option>
+                  </select>
                 </div>
               </div>
 
@@ -357,7 +400,7 @@ export default function OnboardingPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isLoading || handleStatus === 'taken' || handleStatus === 'invalid' || !name.trim() || !handle.trim()}
+                disabled={isLoading || uploadingAvatar || handleStatus === 'taken' || handleStatus === 'invalid' || !name.trim() || !handle.trim()}
                 className="w-full bg-gradient-to-r from-[#C4622D] to-[#E07340] text-white px-6 py-4 rounded-2xl font-bold shadow-[0_0_20px_rgba(196,98,45,0.3)] hover:shadow-[0_0_28px_rgba(196,98,45,0.45)] hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (

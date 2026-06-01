@@ -3,28 +3,32 @@
 -- Run this entire script in your Supabase SQL Editor once.
 -- ============================================================
 
--- 1. PROFILES table (simplified — not linked to Auth yet for prototype)
+-- 1. PROFILES table (linked to Auth for closed beta)
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        text NOT NULL,
-  handle      text UNIQUE NOT NULL,
-  avatar_url  text,
-  bio         text,
-  trust_score int DEFAULT 80,
-  created_at  timestamptz DEFAULT now()
+  id                uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  name              text NOT NULL,
+  handle            text UNIQUE NOT NULL,
+  avatar_url        text,
+  bio               text,
+  city              text,
+  profile_completed boolean DEFAULT false,
+  trust_score       int DEFAULT 80,
+  created_at        timestamptz DEFAULT now()
 );
 
 -- 2. EVENTS table
 CREATE TABLE IF NOT EXISTS public.events (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  title       text NOT NULL,
-  description text,
-  category    text NOT NULL,
-  emoji       text DEFAULT '📍',
-  location    text,
-  event_time  text,            -- human-readable string for prototype (e.g. "Tonight, 8 PM")
-  created_by  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_at  timestamptz DEFAULT now()
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title         text NOT NULL,
+  description   text,
+  category      text NOT NULL,
+  emoji         text DEFAULT '📍',
+  location      text,
+  event_time    text,            -- human-readable string for prototype (e.g. "Tonight, 8 PM")
+  max_attendees int,
+  image_url     text,
+  created_by    uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at    timestamptz DEFAULT now()
 );
 
 -- 3. EVENT_ATTENDEES join table
@@ -65,6 +69,9 @@ CREATE POLICY "Public read groups"          ON public.groups          FOR SELECT
 CREATE POLICY "Public insert events"        ON public.events          FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public insert attendees"     ON public.event_attendees FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public insert profiles"      ON public.profiles        FOR INSERT WITH CHECK (true);
+
+-- Allow event deletion only by the event creator (authenticated user must match created_by)
+CREATE POLICY "Allow delete events by owner" ON public.events FOR DELETE USING (auth.uid() = created_by);
 
 -- ============================================================
 -- SEED DATA — mirrors the existing INITIAL_EVENTS mock data
