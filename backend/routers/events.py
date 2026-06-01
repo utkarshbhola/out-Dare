@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Depends
 from db import supabase
 from models import EventCreate
+from dependencies import get_current_user
 
 router = APIRouter()
 
@@ -16,9 +16,12 @@ def get_events():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/")
-def create_event(event: EventCreate):
+def create_event(
+    event: EventCreate,
+    current_user = Depends(get_current_user)
+):
     try:
-        # Create event
+        # Create event using authenticated user's ID
         event_data = {
             "title": event.title,
             "description": event.description,
@@ -26,7 +29,7 @@ def create_event(event: EventCreate):
             "emoji": event.emoji,
             "location": event.location,
             "event_time": event.time,
-            "created_by": "00000000-0000-0000-0000-000000000001" # Mock user
+            "created_by": current_user.id
         }
         event_response = supabase.table("events").insert(event_data).execute()
         new_event = event_response.data[0]
@@ -34,7 +37,7 @@ def create_event(event: EventCreate):
         # Add creator as attendee
         supabase.table("event_attendees").insert({
             "event_id": new_event["id"],
-            "profile_id": "00000000-0000-0000-0000-000000000001",
+            "profile_id": current_user.id,
             "is_solo": True
         }).execute()
         
@@ -43,11 +46,15 @@ def create_event(event: EventCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{event_id}/join")
-def join_event(event_id: str):
+def join_event(
+    event_id: str,
+    current_user = Depends(get_current_user)
+):
     try:
+        # Add attendee mapping to authenticated user's ID
         response = supabase.table("event_attendees").insert({
             "event_id": event_id,
-            "profile_id": "00000000-0000-0000-0000-000000000001",
+            "profile_id": current_user.id,
             "is_solo": True
         }).execute()
         return response.data
